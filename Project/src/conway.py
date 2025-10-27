@@ -98,7 +98,7 @@ while True:
 
     # continuous input handling
     if working == 0:
-        key_pressed = pygame.key.get_pressed()
+        key_pressed = pygame.key.get_pressed() # when continuous, we use this
         pos = pygame.mouse.get_pos()
         gx = pos[0] // PX_SIZE
         gy = pos[1] // PX_SIZE
