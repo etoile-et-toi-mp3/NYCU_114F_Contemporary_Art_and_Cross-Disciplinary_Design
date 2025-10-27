@@ -1,8 +1,11 @@
 import pygame
 import numpy as np
 import signal, sys
+from collections import Counter
 
 def on_sigint(sig, frame):
+    live_cells.clear()
+    prev_live_cells.clear()
     pygame.quit(); sys.exit(0)
 signal.signal(signal.SIGINT, on_sigint)
 
@@ -10,11 +13,12 @@ signal.signal(signal.SIGINT, on_sigint)
 clock = pygame.time.Clock()
 working = 0
 
-# grid parameters
-WIDTH = 200
-HEIGHT = 200
-grid = np.zeros((WIDTH, HEIGHT), dtype=np.uint8)     # 0 = dead, 1 = alive
-prev_grid = np.full((WIDTH, HEIGHT),  1, dtype=np.int8)  # force full redraw initially
+# view parameters
+WIDTH = 100
+HEIGHT = 100
+live_cells = set()
+prev_live_cells = set()
+force_full_redraw = True  # Flag to force a full screen render, not partial
 
 # UI parameters
 WORKING_FPS = 15
@@ -22,7 +26,8 @@ DRAWING_FPS = 150
 FPS = DRAWING_FPS
 DEAD_COLOR = (50, 50, 50)
 ALIVE_COLOR = (101, 243, 76)
-PX_SIZE = 7
+BASE_COLOR = (90, 90, 90)
+PX_SIZE = 10
 WIDTH_PX = WIDTH * PX_SIZE
 HEIGHT_PX = HEIGHT * PX_SIZE
 
@@ -31,40 +36,63 @@ pygame.init()
 pygame.event.set_allowed([pygame.QUIT, pygame.KEYDOWN, pygame.MOUSEBUTTONUP])
 screen = pygame.display.set_mode((WIDTH_PX, HEIGHT_PX))
 pygame.display.set_caption("Conway's Game of Life")
-screen.fill((90, 90, 90))
+screen.fill(BASE_COLOR)
 
-def neighbor_counts_roll(g: np.ndarray) -> np.ndarray:  # g is uint8 or bool
-    return (
-        np.roll(g,  1, 0) + np.roll(g, -1, 0) +
-        np.roll(g,  1, 1) + np.roll(g, -1, 1) +
-        np.roll(np.roll(g,  1, 0),  1, 1) +
-        np.roll(np.roll(g,  1, 0), -1, 1) +
-        np.roll(np.roll(g, -1, 0),  1, 1) +
-        np.roll(np.roll(g, -1, 0), -1, 1)
-    ).astype(np.uint8)
-
-# render: only redraw changed cells
+# render: only redraw changed cells, or redraw all if forced
 def render():
-    global prev_grid
-    diff = (grid != prev_grid)
-    
-    for x in range(WIDTH):
-        gx = grid[x]
-        for y in range(HEIGHT):
-            if diff[x, y]:
+    global prev_live_cells, force_full_redraw
+
+    if force_full_redraw:
+        # Draw the entire viewport from scratch
+        screen.fill(BASE_COLOR) # Background
+        for x in range(WIDTH):
+            for y in range(HEIGHT):
                 rect = pygame.Rect(x*PX_SIZE, y*PX_SIZE, PX_SIZE-1, PX_SIZE-1)
-                if gx[y] == 0:
-                    pygame.draw.rect(screen, DEAD_COLOR, rect)
-                else:
+                if (x, y) in live_cells:
                     pygame.draw.rect(screen, ALIVE_COLOR, rect)
-    prev_grid = grid.copy() # we won't copy until here!
+                else:
+                    pygame.draw.rect(screen, DEAD_COLOR, rect)
+        force_full_redraw = False # only do this once
+    else:
+        # Optimized: Only draw cells that changed state
+        cells_that_died = prev_live_cells - live_cells
+        cells_that_were_born = live_cells - prev_live_cells
+        cells_to_redraw = cells_that_died.union(cells_that_were_born)
 
+        for (x, y) in cells_to_redraw:
+            # Only draw if the cell is inside our viewport
+            if 0 <= x < WIDTH and 0 <= y < HEIGHT:
+                rect = pygame.Rect(x*PX_SIZE, y*PX_SIZE, PX_SIZE-1, PX_SIZE-1)
+                if (x, y) in live_cells: # Cell was born
+                    pygame.draw.rect(screen, ALIVE_COLOR, rect)
+                else: # Cell died
+                    pygame.draw.rect(screen, DEAD_COLOR, rect)
+    
+    prev_live_cells = live_cells.copy() # Store state for next frame's diff
 
-# logic updater (now vectorized with convolution)
+# logic updater now uses sparse sets (the "infinite" way)
 def update():
-    neigh = neighbor_counts_roll(grid)
-    next_alive = (neigh == 3) | ((grid == 1) & (neigh == 2))
-    grid[:] = np.where(next_alive, 1, 0).astype(np.int8)
+    global live_cells, prev_live_cells
+    
+    # Count neighbors of all live cells
+    neighbor_counts = Counter()
+    for (x, y) in live_cells:
+        # Iterate over all 8 neighbors and increment their count
+        for i in range(x - 1, x + 2):
+            for j in range(y - 1, y + 2):
+                if (i, j) == (x, y):
+                    continue  # Don't count the cell itself
+                neighbor_counts[(i, j)] += 1
+
+    # Apply rules of life
+    next_generation = set()
+    # We only need to check cells that have neighbors
+    for cell, count in neighbor_counts.items():
+        if ((cell in live_cells     and (count == 2 or count == 3)) or
+            (cell not in live_cells and count == 3)):
+            next_generation.add(cell)
+
+    live_cells = next_generation
 
 # initial render
 render()
@@ -73,9 +101,14 @@ while True:
     # discrete events can be handled in this way
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
+            live_cells.clear()
+            prev_live_cells.clear()
             pygame.quit(); sys.exit(0)
+
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_q:
+                live_cells.clear()
+                prev_live_cells.clear()
                 pygame.quit(); sys.exit(0)
             elif event.key == pygame.K_s:
                 working = 1; FPS = WORKING_FPS
@@ -84,17 +117,25 @@ while True:
             elif working == 0:
                 # single-shot ops while paused, ofc can be handled here
                 if event.key == pygame.K_c:
-                    grid[:] = 0
-                    prev_grid[:] = 1
+                    live_cells.clear()
+                    force_full_redraw = True
                 elif event.key == pygame.K_r:
-                    grid[:] = (np.random.random((WIDTH, HEIGHT)) < 0.3).astype(np.uint8)
-                    prev_grid[:] = 1 - grid
+                    live_cells.clear()
+                    for x in range(WIDTH):
+                        for y in range(HEIGHT):
+                            if np.random.random() < 0.3:
+                                live_cells.add((x, y))
+                    force_full_redraw = True
+
         if working == 0 and event.type == pygame.MOUSEBUTTONUP:
             pos = pygame.mouse.get_pos()
             gx = pos[0] // PX_SIZE
             gy = pos[1] // PX_SIZE
             if 0 <= gx < WIDTH and 0 <= gy < HEIGHT:
-                grid[gx, gy] ^= 1
+                if (gx, gy) in live_cells:
+                    live_cells.remove((gx, gy))
+                else:
+                    live_cells.add((gx, gy))
 
     # continuous input handling
     if working == 0:
@@ -104,9 +145,9 @@ while True:
         gy = pos[1] // PX_SIZE
         if 0 <= gx < WIDTH and 0 <= gy < HEIGHT:
             if key_pressed[pygame.K_e]:
-                grid[gx, gy] = 0
+                live_cells.discard((gx, gy))  # Use discard() to avoid error if not in set
             elif key_pressed[pygame.K_w]:
-                grid[gx, gy] = 1
+                live_cells.add((gx, gy))
             elif key_pressed[pygame.K_n]:
                 update()
             render()
