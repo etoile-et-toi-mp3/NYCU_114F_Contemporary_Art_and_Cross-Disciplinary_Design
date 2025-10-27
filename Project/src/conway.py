@@ -9,7 +9,6 @@ signal.signal(signal.SIGINT, on_sigint)
 # game logic variables
 clock = pygame.time.Clock()
 working = 0
-gameover = 0
 
 # grid parameters
 WIDTH = 200
@@ -67,53 +66,54 @@ def update():
     next_alive = (neigh == 3) | ((grid == 1) & (neigh == 2))
     grid[:] = np.where(next_alive, 1, 0).astype(np.int8)
 
+# initial render
+render()
 # main loop
 while True:
-    key_pressed = pygame.key.get_pressed()
-    if key_pressed[pygame.K_s]:
-        working = 1
-        FPS = WORKING_FPS
-    elif key_pressed[pygame.K_p]:
-        working = 0
-        FPS = DRAWING_FPS
-    elif key_pressed[pygame.K_q]:
-        break
-
-    # detect events
+    # discrete events can be handled in this way
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
-            gameover = 1
-            break
-
-        if working == 0:
+            pygame.quit(); sys.exit(0)
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_q:
+                pygame.quit(); sys.exit(0)
+            elif event.key == pygame.K_s:
+                working = 1; FPS = WORKING_FPS
+            elif event.key == pygame.K_p:
+                working = 0; FPS = DRAWING_FPS
+            elif working == 0:
+                # single-shot ops while paused, ofc can be handled here
+                if event.key == pygame.K_c:
+                    grid[:] = 0
+                    prev_grid[:] = 1
+                elif event.key == pygame.K_r:
+                    grid[:] = (np.random.random((WIDTH, HEIGHT)) < 0.3).astype(np.uint8)
+                    prev_grid[:] = 1 - grid
+        if working == 0 and event.type == pygame.MOUSEBUTTONUP:
             pos = pygame.mouse.get_pos()
             gx = pos[0] // PX_SIZE
             gy = pos[1] // PX_SIZE
             if 0 <= gx < WIDTH and 0 <= gy < HEIGHT:
-                if event.type == pygame.MOUSEBUTTONUP:
-                    grid[gx, gy] ^= 1
-                elif key_pressed[pygame.K_e]:
-                    grid[gx, gy] = 0
-                elif key_pressed[pygame.K_w]:
-                    grid[gx, gy] = 1
-                elif key_pressed[pygame.K_c]:
-                    grid[:] = 0
-                    prev_grid[:] = 1
-                elif key_pressed[pygame.K_r]:
-                    grid[:] = np.random.choice([0, 1], size=(WIDTH, HEIGHT), p=[0.7, 0.3])
-                    prev_grid = 1 - grid
-                elif key_pressed[pygame.K_n]:
-                    update()
-            render()
-            
-    if gameover:
-        break
+                grid[gx, gy] ^= 1
 
+    # continuous input handling
+    if working == 0:
+        key_pressed = pygame.key.get_pressed()
+        pos = pygame.mouse.get_pos()
+        gx = pos[0] // PX_SIZE
+        gy = pos[1] // PX_SIZE
+        if 0 <= gx < WIDTH and 0 <= gy < HEIGHT:
+            if key_pressed[pygame.K_e]:
+                grid[gx, gy] = 0
+            elif key_pressed[pygame.K_w]:
+                grid[gx, gy] = 1
+            elif key_pressed[pygame.K_n]:
+                update()
+            render()
+        
     if working == 1:
         update()
         render()
 
     pygame.display.update()
     clock.tick(FPS)
-
-pygame.quit()
