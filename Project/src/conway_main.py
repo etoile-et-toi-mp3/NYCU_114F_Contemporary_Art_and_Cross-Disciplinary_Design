@@ -12,16 +12,22 @@ from conway_utils import *
 def graceful_shutdown(sig, frame):
     pygame.quit(); sys.exit(0)
 
-# game logic variables
-clock = pygame.time.Clock()
-working = 0
-fps = DRAWING_FPS
-
 def main():
-    global working, clock, fps
     # register sighandler first
     signal.signal(signal.SIGINT, graceful_shutdown)
-    
+
+    # variables
+    render = None
+    params = None
+    clock = pygame.time.Clock()
+    working = 0
+    fps = DRAWING_FPS
+
+    # pygame setup
+    pygame.init()
+    pygame.event.set_allowed([pygame.QUIT, pygame.KEYDOWN, pygame.MOUSEBUTTONUP])
+    pygame.display.set_caption("Conway's Game of Life")
+
     # parse args
     parser = argparse.ArgumentParser(description="Conway's Game of Life")
     parser.add_argument(
@@ -35,16 +41,9 @@ def main():
         help='Use webcam as background'
     )
     args = parser.parse_args()
-    
-    # screen setup
-    pygame.init()
-    pygame.event.set_allowed([pygame.QUIT, pygame.KEYDOWN, pygame.MOUSEBUTTONUP])
 
-    render = None
-    params = None
     if args.webcam:
-        # Initialize webcam
-        cap = cv2.VideoCapture(0)
+        cap = cv2.VideoCapture(WEBCAM_INDEX)
         if not cap.isOpened():
             print("Error: Could not open webcam.")
             sys.exit(1)
@@ -67,8 +66,8 @@ def main():
         params.HEIGHT = 100
         params.screen = pygame.display.set_mode((params.WIDTH * PX_SIZE, params.HEIGHT * PX_SIZE))
 
-    pygame.display.set_caption("Conway's Game of Life")
-    params.screen.fill(BASE_COLOR)
+    if args.webcam is False:
+        params.screen.fill(BASE_COLOR)
     
     # initial render
     render(params)
@@ -77,15 +76,11 @@ def main():
         # discrete events can be handled in this way
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                params.live_cells.clear()
-                params.prev_live_cells.clear()
-                pygame.quit(); sys.exit(0)
+                graceful_shutdown(None, None)
 
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_q:
-                    params.live_cells.clear()
-                    params.prev_live_cells.clear()
-                    pygame.quit(); sys.exit(0)
+                    graceful_shutdown(None, None)
                 elif event.key == pygame.K_s:
                     working = 1; fps = WORKING_FPS
                 elif event.key == pygame.K_p:

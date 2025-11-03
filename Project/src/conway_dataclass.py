@@ -5,7 +5,7 @@ from conway_config import *
 
 @dataclass
 class Nocap_params:
-    screen: any = None
+    screen: pygame.Surface = field(default=None)
     live_cells: set = field(default_factory=set)
     prev_live_cells: set = field(default_factory=set)
     force_full_redraw: bool = True
