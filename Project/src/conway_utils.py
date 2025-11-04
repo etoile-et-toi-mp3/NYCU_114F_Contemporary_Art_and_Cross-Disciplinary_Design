@@ -1,4 +1,3 @@
-from turtle import width
 import pygame
 from pygame import surfarray
 import numpy as np
@@ -59,7 +58,7 @@ def render_withcap(params: Withcap_params):
     ret, frame = params.cap.read()
     if not ret:
         print("Error: Webcam frame could not be read.")
-        params.screen.fill(params.BASE_COLOR) # Fallback
+        raise RuntimeError("Webcam frame read failure")
     else:
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         frame = np.rot90(frame)

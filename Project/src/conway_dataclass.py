@@ -18,4 +18,10 @@ class Nocap_params:
 
 @dataclass
 class Withcap_params:
-    pass
+    screen: pygame.Surface = field(default=None)
+    cap: cv2.VideoCapture = field(default=None)
+    live_cells: set = field(default_factory=set)
+    ALIVE_COLOR: tuple = ALIVE_COLOR
+    WIDTH: int = 100
+    HEIGHT: int = 100
+    PX_SIZE: int = PX_SIZE

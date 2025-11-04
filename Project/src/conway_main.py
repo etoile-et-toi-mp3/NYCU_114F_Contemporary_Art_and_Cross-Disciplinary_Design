@@ -3,7 +3,7 @@ import numpy as np
 import signal, sys
 import argparse
 import cv2
-import pygame.surfarray as surfarray
+import time
 from conway_config import *
 from conway_dataclass import *
 from conway_utils import *
@@ -49,6 +49,7 @@ def main():
             sys.exit(1)
             
         render = render_withcap
+        params = Withcap_params()
     else:
         render = render_nocap
         params = Nocap_params()
@@ -121,6 +122,7 @@ def main():
                     params.live_cells.add((gx, gy))
                 elif key_pressed[pygame.K_n]:
                     update(params)
+                    time.sleep(0.08)  # TODO: find a smoother way to control speed
                 render(params)
             
         if working == 1:
