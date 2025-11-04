@@ -59,16 +59,50 @@ def render_withcap(params: Withcap_params):
     if not ret:
         print("Error: Webcam frame could not be read.")
         raise RuntimeError("Webcam frame read failure")
-    else:
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        frame = np.rot90(frame)
-        frame = cv2.flip(frame, 0)
-        
-        webcam_surface = surfarray.make_surface(frame)
-        webcam_surface = pygame.transform.scale(webcam_surface, (params.WIDTH * PX_SIZE, params.HEIGHT * PX_SIZE))
-        
-        params.screen.blit(webcam_surface, (0, 0))
+    
+    # 1. --- Get the 2 Dimensions ---
+    # OpenCV shape is (height, width, channels)
+    img_height, img_width = frame.shape[0], frame.shape[1]
+    screen_width, screen_height = params.screen.get_size()
 
+    # 2. --- Compare Aspect Ratios ---
+    img_aspect = img_width / img_height
+    screen_aspect = screen_width / screen_height
+
+    if img_aspect > screen_aspect:
+        # --- Image is WIDER than the screen ---
+        # We scale based on height
+        scale_factor = screen_height / img_height
+        scaled_width = int(img_width * scale_factor)
+        scaled_height = screen_height
+        # We'll need a negative X offset to center it
+        blit_x = (screen_width - scaled_width) // 2
+        blit_y = 0
+    else:
+        # --- Image is TALLER than the screen (or same aspect) ---
+        # We scale based on width
+        scale_factor = screen_width / img_width
+        scaled_width = screen_width
+        scaled_height = int(img_height * scale_factor)
+        # We'll need a negative Y offset to center it
+        blit_x = 0
+        blit_y = (screen_height - scaled_height) // 2
+
+    # 3. --- Convert and Scale Frame ---
+    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    frame = cv2.flip(frame, 1)
+    frame = np.rot90(frame)
+    
+    wbcm = surfarray.make_surface(frame)
+    # Use smoothscale for better quality
+    webcam_surface = pygame.transform.smoothscale(wbcm, (scaled_width, scaled_height))
+
+    # 4. --- Blit (Draw) the Clipped Image ---
+    # By blitting at a negative offset, we center the
+    # oversized image, effectively "clipping" the edges.
+    params.screen.blit(webcam_surface, (blit_x, blit_y))
+    params.screen.blit(params.grid_surface, (0, 0))
+    
     # Draw only live cells
     for (x, y) in params.live_cells:
         if 0 <= x < params.WIDTH and 0 <= y < params.HEIGHT:

@@ -12,8 +12,8 @@ class Nocap_params:
     BASE_COLOR: tuple = BASE_COLOR
     ALIVE_COLOR: tuple = ALIVE_COLOR
     DEAD_COLOR: tuple = DEAD_COLOR
-    WIDTH: int = 100
-    HEIGHT: int = 100
+    WIDTH: int = WIDTH
+    HEIGHT: int = HEIGHT
     PX_SIZE: int = PX_SIZE
 
 @dataclass
@@ -22,6 +22,8 @@ class Withcap_params:
     cap: cv2.VideoCapture = field(default=None)
     live_cells: set = field(default_factory=set)
     ALIVE_COLOR: tuple = ALIVE_COLOR
-    WIDTH: int = 100
-    HEIGHT: int = 100
+    BASE_COLOR: tuple = BASE_COLOR
+    WIDTH: int = WIDTH
+    HEIGHT: int = HEIGHT
     PX_SIZE: int = PX_SIZE
+    grid_surface: pygame.Surface = field(default=None)

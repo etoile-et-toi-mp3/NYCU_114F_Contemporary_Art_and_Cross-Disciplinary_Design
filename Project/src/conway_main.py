@@ -43,13 +43,12 @@ def main():
     args = parser.parse_args()
 
     if args.webcam:
-        cap = cv2.VideoCapture(WEBCAM_INDEX)
-        if not cap.isOpened():
-            print("Error: Could not open webcam.")
-            sys.exit(1)
-            
         render = render_withcap
         params = Withcap_params()
+        params.cap = cv2.VideoCapture(WEBCAM_INDEX)
+        if not params.cap.isOpened():
+            print("Error: Could not open webcam.")
+            sys.exit(1)
     else:
         render = render_nocap
         params = Nocap_params()
@@ -63,13 +62,21 @@ def main():
         params.HEIGHT = HEIGHT_PX // PX_SIZE
     else:
         # Use fixed window size
-        params.WIDTH = 100
-        params.HEIGHT = 100
+        params.WIDTH = WIDTH
+        params.HEIGHT = HEIGHT
         params.screen = pygame.display.set_mode((params.WIDTH * PX_SIZE, params.HEIGHT * PX_SIZE))
 
     if args.webcam is False:
         params.screen.fill(BASE_COLOR)
-    
+    else:
+        params.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920) # from obs settings
+        params.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+        params.grid_surface = pygame.Surface((params.WIDTH*PX_SIZE, params.HEIGHT*PX_SIZE), pygame.SRCALPHA)
+        for x in range(0, params.WIDTH):
+            pygame.draw.line(params.grid_surface, params.BASE_COLOR, (x*PX_SIZE-1, 0), (x*PX_SIZE-1, params.HEIGHT * PX_SIZE))
+        for y in range(0, params.HEIGHT):
+            pygame.draw.line(params.grid_surface, params.BASE_COLOR, (0, y*PX_SIZE-1), (params.WIDTH * PX_SIZE, y*PX_SIZE-1))
+
     # initial render
     render(params)
     # main loop
