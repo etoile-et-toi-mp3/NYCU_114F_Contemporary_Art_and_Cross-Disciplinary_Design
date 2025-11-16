@@ -4,9 +4,11 @@ import signal, sys
 import argparse
 import cv2
 import time
+import mediapipe as mp
 from conway_config import *
 from conway_dataclass import *
 from conway_utils import *
+from conway_motiondetector import HandController
 
 # signal handler for graceful exit
 def graceful_shutdown(sig, frame):
@@ -22,6 +24,7 @@ def main():
     clock = pygame.time.Clock()
     working = 0
     fps = DRAWING_FPS
+    hand_controller = HandController()
 
     # pygame setup
     pygame.init()
@@ -90,10 +93,10 @@ def main():
                 if event.key == pygame.K_q:
                     graceful_shutdown(None, None)
                 elif event.key == pygame.K_s:
-                    working = 1; fps = WORKING_FPS
+                    params.working = True; fps = WORKING_FPS
                 elif event.key == pygame.K_p:
-                    working = 0; fps = DRAWING_FPS
-                elif working == 0:
+                    params.working = False; fps = DRAWING_FPS
+                elif not params.working:
                     # single-shot ops while paused, ofc can be handled here
                     if event.key == pygame.K_c:
                         params.live_cells.clear()
@@ -103,39 +106,60 @@ def main():
                         for x in range(params.WIDTH):
                             for y in range(params.HEIGHT):
                                 if np.random.random() < 0.3:
-                                    params.live_cells.add((x, y))
+                                    params.live_cells[(x, y)] = np.random.randint(len(params.ALIVE_COLOR))
                         params.force_full_redraw = True
 
-            if working == 0 and event.type == pygame.MOUSEBUTTONUP:
-                pos = pygame.mouse.get_pos()
-                gx = pos[0] // PX_SIZE
-                gy = pos[1] // PX_SIZE
-                if 0 <= gx < params.WIDTH and 0 <= gy < params.HEIGHT:
-                    if (gx, gy) in params.live_cells:
-                        params.live_cells.remove((gx, gy))
-                    else:
-                        params.live_cells.add((gx, gy))
+        # hand input
+        if isinstance(params, Withcap_params):
+            ret, frame = params.cap.read()
+            if ret is not True:
+                print("Error: Could not read frame from webcam.")
+                sys.exit(1)
+            # Process frame
+            frame = cv2.flip(frame, 1) # Mirror image for more natural interaction
+            frame = hand_controller.process(frame, params)
+            params.frame_with_lm_drawn = cv2.flip(frame, 1) # Store mirrored frame for rendering
+            if WORKING_DRAWABLE or not params.working:
+                # Apply Drawing/Erasing from Cursor
+                cx, cy = params.cursor_pos
+                if cx != -1 and cy != -1:
+                    gx = cx // PX_SIZE
+                    gy = cy // PX_SIZE
+                    
+                    for dy in range(-params.cursor_size, params.cursor_size + 1):
+                        for dx in range(-params.cursor_size, params.cursor_size + 1):
+                            if dx*dx + dy*dy <= params.cursor_size*params.cursor_size:
+                                
+                                # Calculate the actual grid coordinate
+                                nx = gx + dx
+                                ny = gy + dy
+                                
+                                # CRITICAL: Check boundaries so we don't crash at the screen edge
+                                if 0 <= nx < params.WIDTH and 0 <= ny < params.HEIGHT:
+                                    if params.hand_drawing:
+                                        params.live_cells.setdefault((nx, ny), np.random.randint(len(params.ALIVE_COLOR)))
+                                    elif params.hand_erasing:
+                                        params.live_cells.pop((nx, ny), None)
 
-        # continuous input handling
-        if working == 0:
+        if WORKING_DRAWABLE or not params.working:
             key_pressed = pygame.key.get_pressed() # when continuous, we use this
             pos = pygame.mouse.get_pos()
             gx = pos[0] // PX_SIZE
             gy = pos[1] // PX_SIZE
             if 0 <= gx < params.WIDTH and 0 <= gy < params.HEIGHT:
                 if key_pressed[pygame.K_e]:
-                    params.live_cells.discard((gx, gy))  # Use discard() to avoid error if not in set
+                    params.live_cells.pop((gx, gy), None)  # Use pop() to avoid error if not in dict
                 elif key_pressed[pygame.K_w]:
-                    params.live_cells.add((gx, gy))
-                elif key_pressed[pygame.K_n]:
-                    update(params)
-                    time.sleep(0.08)  # TODO: find a smoother way to control speed
-                render(params)
-            
-        if working == 1:
-            update(params)
-            render(params)
+                    params.live_cells[(gx, gy)] = np.random.randint(len(params.ALIVE_COLOR))
 
+        if not params.working:
+            if key_pressed[pygame.K_n]:
+                update(params)
+                time.sleep(0.08)  # TODO: find a smoother way to control speed
+        else:
+            update(params)
+            
+        render(params)
         pygame.display.update()
         clock.tick(fps)
 
