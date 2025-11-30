@@ -5,6 +5,7 @@ import argparse
 import cv2
 import time
 import mediapipe as mp
+from pythonosc import udp_client
 from conway_config import *
 from conway_dataclass import *
 from conway_utils import *
@@ -22,7 +23,6 @@ def main():
     render = None
     params = None
     clock = pygame.time.Clock()
-    working = 0
     fps = DRAWING_FPS
     hand_controller = HandController()
 
@@ -80,8 +80,11 @@ def main():
         for y in range(0, params.HEIGHT):
             pygame.draw.line(params.grid_surface, params.BASE_COLOR, (0, y*PX_SIZE-1), (params.WIDTH * PX_SIZE, y*PX_SIZE-1))
 
-    # initial render
-    render(params)
+    client = udp_client.SimpleUDPClient(OSC_IP, OSC_PORT)
+    params.osc_client = client
+    
+    # initial render (seems like it's useless???)
+    # render(params)
     # main loop
     while True:
         # discrete events can be handled in this way
@@ -160,6 +163,7 @@ def main():
             update(params)
             
         render(params)
+        draw_hud(params, clock.get_fps())
         pygame.display.update()
         clock.tick(fps)
 

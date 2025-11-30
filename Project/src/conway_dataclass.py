@@ -3,6 +3,7 @@ import cv2
 from dataclasses import dataclass, field
 from conway_config import *
 import numpy as np
+from typing import Any
 
 ALIVE_COLOR_DEFAULT = ALIVE_COLOR
 
@@ -19,6 +20,8 @@ class Nocap_params:
     HEIGHT: int = HEIGHT
     PX_SIZE: int = PX_SIZE
     working: bool = False
+    osc_client: Any = None
+    sound_posedge: set = field(default_factory=set) # Stores (x, y) of newly born cells
 
 @dataclass
 class Withcap_params:
@@ -43,3 +46,7 @@ class Withcap_params:
     last_toggle_time: int = 0
     last_random_time: int = 0
     last_clear_time: int = 0
+    
+    osc_client: Any = None
+    sound_posedge: set = field(default_factory=set) # Stores (x, y) of newly born cells
+

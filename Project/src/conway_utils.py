@@ -4,8 +4,26 @@ import numpy as np
 from collections import Counter
 from conway_dataclass import *
 import mediapipe as mp
+import os
+import psutil
+from conway_sound import process_sound
+
+# --- INIT UI RESOURCES ONCE ---
+# We initialize these at the module level so we don't reload fonts every frame
+pygame.font.init()
+# "Consolas" or "Courier New" are good because they are monospaced (numbers line up)
+try:
+    FONT_MAIN = pygame.font.SysFont("Consolas", 18, bold=True)
+    FONT_SMALL = pygame.font.SysFont("Consolas", 14)
+except:
+    FONT_MAIN = pygame.font.SysFont("Arial", 18, bold=True)
+    FONT_SMALL = pygame.font.SysFont("Arial", 14)
+
+PROCESS = psutil.Process(os.getpid())
 
 def update(params):
+    params.sound_posedge.clear()
+    
     # Count neighbors of all live cells
     neighbor_counts = Counter()
     # collect the colors indexes of a cell's neighbors, to decide color of born cells
@@ -24,20 +42,23 @@ def update(params):
 
     # Apply rules of life
     next_generation = dict()
-    # We only need to check cells that have neighbors
+    # We only need to check cells that have alive neighbors
     for cell, count in neighbor_counts.items():
         if ((cell in params.live_cells     and (count == 2 or count == 3)) or
             (cell not in params.live_cells and count == 3)):
-            # color is the most voted among neighbors
             if cell in params.live_cells:
+                # Cell survives, keep its color
                 next_generation.setdefault(cell, params.live_cells[cell])
             else:
                 # New cell is born, choose color by majority vote
-                if len(color_accumulator[cell]) > 0:
-                    most_common_color = Counter(color_accumulator[cell]).most_common(1)[0][0]
-                    next_generation.setdefault(cell, most_common_color)
+                most_common_color = Counter(color_accumulator[cell]).most_common(1)[0][0]
+                next_generation.setdefault(cell, most_common_color)
+                if (params.cursor_pos[0]/params.PX_SIZE - (params.cursor_size+1) // 2 <= cell[0] < params.cursor_pos[0]/params.PX_SIZE + (params.cursor_size+1) // 2 
+                and params.cursor_pos[1]/params.PX_SIZE - (params.cursor_size+1) // 2 <= cell[1] < params.cursor_pos[1]/params.PX_SIZE + (params.cursor_size+1) // 2):
+                    params.sound_posedge.add(cell)  # Mark this cell as newly born for sound processing, we only care about births inside the viewport
 
     params.live_cells = next_generation
+    process_sound(params)
 
 def render_nocap(params: Nocap_params):
     if params.force_full_redraw:
@@ -136,3 +157,89 @@ def render_withcap(params: Withcap_params):
         
         # Optional: Draw a tiny dot in the exact center for precision
         pygame.draw.circle(params.screen, cursor_color, (cx, cy), 3)
+
+def draw_hud(params, fps: float):
+    screen = params.screen
+    
+    # 1. --- DATA COLLECTION ---
+    # Memory: RSS (Resident Set Size) is the non-swapped physical memory a process has used
+    mem_info = PROCESS.memory_info()
+    mem_usage_mb = mem_info.rss / 1024 / 1024 
+    
+    num_cells = len(params.live_cells)
+    
+    # 2. --- DEFINE TEXT LINES ---
+    # List of (Text, Color) tuples
+    lines = []
+    
+    # > FPS & MEMORY
+    lines.append((f"FPS: {int(fps)}  |  RAM: {mem_usage_mb:.1f} MB", (200, 200, 200)))
+    
+    # > CELL COUNT
+    lines.append((f"Cells: {num_cells}", (200, 200, 200)))
+    
+    # > GAME STATE (Running/Paused)
+    if params.working:
+        state_text = "STATE: RUNNING"
+        state_color = (0, 255, 0) # Green
+    else:
+        state_text = "STATE: PAUSED"
+        state_color = (255, 50, 50) # Red
+    lines.append((state_text, state_color))
+    
+    # > CURSOR INFO
+    if isinstance(params, Withcap_params):
+        cursor_text = f"Cursor Size: {params.cursor_size}"
+        lines.append((cursor_text, (255, 255, 0))) # Yellow
+    
+        # > HAND ACTION
+        if params.hand_drawing:
+            action = "[ DRAWING ]"
+            action_color = (0, 255, 0)
+        elif params.hand_erasing:
+            action = "[ ERASING ]"
+            action_color = (255, 0, 0)
+        else:
+            action = "[ HOVERING ]"
+            action_color = (200, 200, 200)
+        lines.append((action, action_color))
+
+    # 3. --- DRAW BACKGROUND PANEL ---
+    # We draw a semi-transparent black box so text is readable over the webcam
+    # Box height depends on number of lines
+    panel_width = 280
+    panel_height = 10 + (len(lines) * 20)
+    
+    # Create a transparent surface
+    panel = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA)
+    panel.fill((0, 0, 0, 180)) # Black with alpha=180
+    
+    # Draw a border
+    pygame.draw.rect(panel, (100, 100, 100), panel.get_rect(), 1)
+    
+    # Blit panel to top-left of screen
+    screen.blit(panel, (10, 10))
+
+    # 4. --- DRAW TEXT ---
+    x_offset = 20
+    y_offset = 15
+    
+    for text_str, color in lines:
+        text_surf = FONT_MAIN.render(text_str, True, color)
+        screen.blit(text_surf, (x_offset, y_offset))
+        y_offset += 20 # Move down for next line
+
+    # 5. --- OPTIONAL: BOTTOM HELP BAR ---
+    # A small strip at the bottom explaining controls
+    help_text = "L-Hand: Pinch Index(Draw) Middle(Erase) Ring(Rnd) Pinky(Clr) | R-Hand: Pinch to Resize"
+    help_surf = FONT_SMALL.render(help_text, True, (200, 200, 200))
+    
+    # Draw bottom background strip
+    bottom_strip = pygame.Surface((params.WIDTH * params.PX_SIZE, 25), pygame.SRCALPHA)
+    bottom_strip.fill((0, 0, 0, 150))
+    screen.blit(bottom_strip, (0, params.HEIGHT * params.PX_SIZE - 25))
+    
+    # Center the help text
+    screen_w = params.WIDTH * params.PX_SIZE
+    text_w = help_surf.get_width()
+    screen.blit(help_surf, ((screen_w - text_w) // 2, params.HEIGHT * params.PX_SIZE - 22))

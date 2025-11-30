@@ -40,3 +40,10 @@ HEIGHT = 100
 PX_SIZE = 10
 WEBCAM_INDEX = 5
 WORKING_DRAWABLE = True
+
+# OSC section
+OSC_IP = "127.0.0.1"
+OSC_PORT = 9000  # VCV Rack default is often 9000 or 8000
+MAX_VOICES = 16  # Limit how many notes play per frame to prevent crashing VCV
+PITCH_MIN = 0.0
+PITCH_MAX = 8.0  # 8 Octaves (C0 to C8)
