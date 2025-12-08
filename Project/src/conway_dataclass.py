@@ -21,7 +21,6 @@ class Nocap_params:
     PX_SIZE: int = PX_SIZE
     working: bool = False
     osc_client: Any = None
-    sound_posedge: set = field(default_factory=set) # Stores (x, y) of newly born cells
 
 @dataclass
 class Withcap_params:
@@ -35,18 +34,17 @@ class Withcap_params:
     PX_SIZE: int = PX_SIZE
     grid_surface: pygame.Surface = field(default=None)
     working: bool = False
-    
+
     cursor_pos: tuple = (-1, -1)
     cursor_size: int = 1
     hand_drawing: bool = False
     hand_erasing: bool = False
     frame_with_lm_drawn: np.ndarray = None
-    
+
     # Debounce flags (to prevent rapid-fire toggling)
     last_toggle_time: int = 0
     last_random_time: int = 0
     last_clear_time: int = 0
-    
-    osc_client: Any = None
-    sound_posedge: set = field(default_factory=set) # Stores (x, y) of newly born cells
 
+    osc_client: Any = None
+    cell_stability: dict[tuple, int] = field(default_factory=dict)

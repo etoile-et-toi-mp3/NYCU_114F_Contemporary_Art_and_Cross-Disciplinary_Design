@@ -21,25 +21,7 @@ PROCESS = psutil.Process(os.getpid())
 
 
 def update(params):
-    params.sound_posedge.clear()
-
-    # --- 1. PRE-CALCULATE CURSOR BOUNDS (OPTIMIZATION) ---
-    # We do this OUTSIDE the loop so we don't calculate it 10,000 times
-    check_cursor_range = False
-    cursor_grid_x = 0
-    cursor_grid_y = 0
-    cursor_radius_sq = 0
-
-    # Only apply this logic if we are in Webcam mode and the cursor is visible
-    if isinstance(params, Withcap_params) and params.cursor_pos != (-1, -1):
-        check_cursor_range = True
-        # Convert Pixel coordinates to Grid coordinates
-        cursor_grid_x = params.cursor_pos[0] // params.PX_SIZE
-        cursor_grid_y = params.cursor_pos[1] // params.PX_SIZE
-        # Square the radius to avoid slow square root math in the loop
-        cursor_radius_sq = params.cursor_size * params.cursor_size
-
-    # --- 2. COUNT NEIGHBORS ---
+    # 2. Game of Life Logic (Standard)
     neighbor_counts = Counter()
     color_accumulator = {tuple: list()}
 
@@ -52,37 +34,45 @@ def update(params):
                 color_accumulator.setdefault((i, j), [])
                 color_accumulator[(i, j)].append(params.live_cells[(x, y)])
 
-    # --- 3. APPLY RULES ---
     next_generation = dict()
+    next_stability = dict()  # Temp dict for next frame
+
     for cell, count in neighbor_counts.items():
         if (cell in params.live_cells and (count == 2 or count == 3)) or (
             cell not in params.live_cells and count == 3
         ):
+
             if cell in params.live_cells:
-                next_generation.setdefault(cell, params.live_cells[cell])
+                # SURVIVOR -> STABLE
+                next_generation[cell] = params.live_cells[cell]
+                # Increment existing stability count, default to 1 if missing
+                current_stab = params.cell_stability.get(cell, 0)
+                next_stability[cell] = current_stab + 1
             else:
-                # BIRTH
-                most_common_color = Counter(color_accumulator[cell]).most_common(1)[0][0]
-                next_generation.setdefault(cell, most_common_color)
-                
-                # --- NEW SOUND LOGIC ---
-                should_play_sound = False
-                
-                if check_cursor_range:
-                    # Check Euclidean distance: (x-cx)^2 + (y-cy)^2 <= r^2
-                    dx = cell[0] - cursor_grid_x
-                    dy = cell[1] - cursor_grid_y
-                    if dx*dx + dy*dy <= cursor_radius_sq:
-                        should_play_sound = True
-                
-                # Fallback: If not using webcam (Mouse mode), play everything
-                elif isinstance(params, Nocap_params):
-                    should_play_sound = True
+                # NEWBORN -> CHAOS
+                # (Color logic remains same)
+                most_common_color = Counter(color_accumulator[cell]).most_common(1)[0][
+                    0
+                ]
+                next_generation[cell] = most_common_color
+                # Reset stability to 0
+                next_stability[cell] = 0
 
-                if should_play_sound:
-                    params.sound_posedge.add(cell) 
-
+    # Apply updates
     params.live_cells = next_generation
+    params.cell_stability = next_stability  # Save the stability map
+
+    # 4. --- NEW SOUND LOGIC: PROBE THE CURSOR AREA ---
+    # Only run this if we are in Webcam mode and have a valid cursor
+    if isinstance(params, Withcap_params) and params.cursor_pos != (-1, -1):
+
+        # Grid Coordinates of Cursor
+        gx = params.cursor_pos[0] // params.PX_SIZE
+        gy = params.cursor_pos[1] // params.PX_SIZE
+        r = params.cursor_size
+        r_sq = r * r
+
+    # 5. Process Sound
     process_sound(params)
 
 
@@ -117,12 +107,10 @@ def render_withcap(params: Withcap_params):
     if params.frame_with_lm_drawn is None:
         return
 
-    # 1. Get Dimensions
     frame = params.frame_with_lm_drawn
     img_height, img_width = frame.shape[0], frame.shape[1]
     screen_width, screen_height = params.screen.get_size()
 
-    # 2. Aspect Ratio Scaling
     img_aspect = img_width / img_height
     screen_aspect = screen_width / screen_height
 
@@ -139,16 +127,14 @@ def render_withcap(params: Withcap_params):
         blit_x = 0
         blit_y = (screen_height - scaled_height) // 2
 
-    # 3. Convert for Pygame
+    # Pygame expects (width, height, channels), OpenCV gives (height, width, channels)
+    # Transpose so we don't rotate the image
     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    
-    # Transpose for Pygame (Swap W/H)
     frame_rgb = np.transpose(frame_rgb, (1, 0, 2))
 
     wbcm = surfarray.make_surface(frame_rgb)
     webcam_surface = pygame.transform.smoothscale(wbcm, (scaled_width, scaled_height))
 
-    # 4. Blit
     params.screen.blit(webcam_surface, (blit_x, blit_y))
     if params.grid_surface:
         params.screen.blit(params.grid_surface, (0, 0))

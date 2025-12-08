@@ -45,5 +45,5 @@ WORKING_DRAWABLE = True
 OSC_IP = "127.0.0.1"
 OSC_PORT = 9000  # VCV Rack default is often 9000 or 8000
 MAX_VOICES = 16  # Limit how many notes play per frame to prevent crashing VCV
-PITCH_MIN = 0.0
-PITCH_MAX = 8.0  # 8 Octaves (C0 to C8)
+PITCH_MIN = -3.0 # -3 Octaves (C-3)
+PITCH_MAX = 7.0  # 10 Octaves (C0 to C10)
