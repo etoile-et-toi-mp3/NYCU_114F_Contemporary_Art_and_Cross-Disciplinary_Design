@@ -49,8 +49,7 @@ def update_game_logic(params):
             if cell in params.live_cells:
                 # SURVIVOR -> STABLE
                 next_generation[cell] = params.live_cells[cell]
-                current_stab = params.cell_stability.get(cell, 0)
-                next_stability[cell] = current_stab + 1
+                next_stability[cell] = params.cell_stability.get(cell, 0) + 1 # current stability + 1
             else:
                 # NEWBORN -> CHAOS
                 most_common_color = Counter(color_accumulator[cell]).most_common(1)[0][0]
@@ -60,7 +59,6 @@ def update_game_logic(params):
     # 3. Apply Update
     params.live_cells = next_generation
     params.cell_stability = next_stability
-
 
 def update_sound_probe(params):
     """

@@ -21,6 +21,7 @@ class Nocap_params:
     PX_SIZE: int = PX_SIZE
     working: bool = False
     osc_client: Any = None
+    cell_stability: dict[tuple, int] = field(default_factory=dict)
 
 @dataclass
 class Withcap_params:

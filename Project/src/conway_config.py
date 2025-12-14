@@ -1,7 +1,7 @@
 # Read-Only Constants
 WORKING_FPS = 15
 DRAWING_FPS = 150
-DEAD_COLOR = (50, 50, 50)
+DEAD_COLOR = (30, 30, 30)
 
 LIGHT_GREEN = [(101, 243, 76)]
 LIGHT_BLUE = [(141, 186, 242)]

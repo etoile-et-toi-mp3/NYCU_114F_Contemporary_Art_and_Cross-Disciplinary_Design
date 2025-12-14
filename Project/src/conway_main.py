@@ -167,7 +167,8 @@ def main():
         # --- SOUND LOGIC (Always Run) ---
         # This ensures we can hear static cells when paused,
         # AND ensures sound stops (Gate 0) if we move the hand away.
-        update_sound_probe(params)
+        if isinstance(params, Withcap_params):
+            update_sound_probe(params)
             
         render(params)
         draw_hud(params, clock.get_fps())
