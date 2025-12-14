@@ -20,11 +20,15 @@ except:
 PROCESS = psutil.Process(os.getpid())
 
 
-def update(params):
-    # 2. Game of Life Logic (Standard)
+def update_game_logic(params):
+    """
+    Only handles the Game of Life simulation (Births/Deaths/Stability).
+    Does NOT handle sound.
+    """
     neighbor_counts = Counter()
     color_accumulator = {tuple: list()}
 
+    # 1. Count Neighbors
     for x, y in params.live_cells:
         for i in range(x - 1, x + 2):
             for j in range(y - 1, y + 2):
@@ -35,48 +39,62 @@ def update(params):
                 color_accumulator[(i, j)].append(params.live_cells[(x, y)])
 
     next_generation = dict()
-    next_stability = dict()  # Temp dict for next frame
+    next_stability = dict()
 
+    # 2. Apply Rules
     for cell, count in neighbor_counts.items():
         if (cell in params.live_cells and (count == 2 or count == 3)) or (
             cell not in params.live_cells and count == 3
         ):
-
             if cell in params.live_cells:
                 # SURVIVOR -> STABLE
                 next_generation[cell] = params.live_cells[cell]
-                # Increment existing stability count, default to 1 if missing
                 current_stab = params.cell_stability.get(cell, 0)
                 next_stability[cell] = current_stab + 1
             else:
                 # NEWBORN -> CHAOS
-                # (Color logic remains same)
-                most_common_color = Counter(color_accumulator[cell]).most_common(1)[0][
-                    0
-                ]
+                most_common_color = Counter(color_accumulator[cell]).most_common(1)[0][0]
                 next_generation[cell] = most_common_color
-                # Reset stability to 0
                 next_stability[cell] = 0
 
-    # Apply updates
+    # 3. Apply Update
     params.live_cells = next_generation
-    params.cell_stability = next_stability  # Save the stability map
+    params.cell_stability = next_stability
 
-    # 4. --- NEW SOUND LOGIC: PROBE THE CURSOR AREA ---
-    # Only run this if we are in Webcam mode and have a valid cursor
-    if isinstance(params, Withcap_params) and params.cursor_pos != (-1, -1):
 
-        # Grid Coordinates of Cursor
+def update_sound_probe(params):
+    """
+    Checks the cursor position and sends sound to VCV Rack.
+    """
+    # 1. Clear previous sound buffer
+    params.sound_posedge.clear()
+
+    # 2. Probe the Cursor Area
+    # --- CHANGE: Added "and params.working" to this check ---
+    # Now, if the game is PAUSED, this block is skipped. 
+    # The list stays empty, and process_sound kills the volume.
+    if params.working and isinstance(params, Withcap_params) and params.cursor_pos != (-1, -1):
         gx = params.cursor_pos[0] // params.PX_SIZE
         gy = params.cursor_pos[1] // params.PX_SIZE
         r = params.cursor_size
         r_sq = r * r
+        
+        for dy in range(-r, r + 1):
+            for dx in range(-r, r + 1):
+                if dx*dx + dy*dy <= r_sq:
+                    nx = gx + dx
+                    ny = gy + dy
+                    
+                    if (nx, ny) in params.live_cells:
+                        params.sound_posedge.add((nx, ny))
 
-    # 5. Process Sound
+    # 3. Process Sound
+    # If paused, sound_posedge is empty -> Sends Gate 0 -> Silence.
     process_sound(params)
 
 
 def render_nocap(params: Nocap_params):
+    # ... (Same as before) ...
     if params.force_full_redraw:
         params.screen.fill(params.BASE_COLOR)
         for x in range(params.WIDTH):
@@ -104,6 +122,7 @@ def render_nocap(params: Nocap_params):
 
 
 def render_withcap(params: Withcap_params):
+    # ... (Same as before) ...
     if params.frame_with_lm_drawn is None:
         return
 
@@ -127,25 +146,33 @@ def render_withcap(params: Withcap_params):
         blit_x = 0
         blit_y = (screen_height - scaled_height) // 2
 
-    # Pygame expects (width, height, channels), OpenCV gives (height, width, channels)
-    # Transpose so we don't rotate the image
     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     frame_rgb = np.transpose(frame_rgb, (1, 0, 2))
 
     wbcm = surfarray.make_surface(frame_rgb)
     webcam_surface = pygame.transform.smoothscale(wbcm, (scaled_width, scaled_height))
 
+    # 4. Blit Webcam
     params.screen.blit(webcam_surface, (blit_x, blit_y))
+
+    # --- NEW: DIMMER LAYER ---
+    # Create a black surface with Alpha (Transparency)
+    # 0 = Invisible, 255 = Pitch Black. 
+    # 150 is a good "Sunglass" effect.
+    dim_surface = pygame.Surface(params.screen.get_size(), pygame.SRCALPHA)
+    dim_surface.fill((0, 0, 0, 150)) 
+    params.screen.blit(dim_surface, (0, 0))
+    # -------------------------
+
+    # 5. Draw Grid (Optional, if you want it on top of the dimmer)
     if params.grid_surface:
         params.screen.blit(params.grid_surface, (0, 0))
 
-    # Draw live cells
     for x, y in params.live_cells:
         if 0 <= x < params.WIDTH and 0 <= y < params.HEIGHT:
             rect = pygame.Rect(x * params.PX_SIZE, y * params.PX_SIZE, params.PX_SIZE - 1, params.PX_SIZE - 1)
             pygame.draw.rect(params.screen, params.ALIVE_COLOR[params.live_cells[(x, y)]], rect)
 
-    # Draw Hand Cursor
     cx, cy = params.cursor_pos
     if cx != -1 and cy != -1:
         cursor_color = (0, 0, 255)
@@ -160,6 +187,7 @@ def render_withcap(params: Withcap_params):
 
 
 def draw_hud(params, fps: float):
+    # ... (Same as before) ...
     screen = params.screen
     mem_info = PROCESS.memory_info()
     mem_usage_mb = mem_info.rss / 1024 / 1024

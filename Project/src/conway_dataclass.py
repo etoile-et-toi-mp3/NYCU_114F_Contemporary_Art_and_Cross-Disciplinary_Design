@@ -48,3 +48,4 @@ class Withcap_params:
 
     osc_client: Any = None
     cell_stability: dict[tuple, int] = field(default_factory=dict)
+    sound_posedge: set = field(default_factory=set)

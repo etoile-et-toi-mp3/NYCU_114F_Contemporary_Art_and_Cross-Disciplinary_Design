@@ -38,12 +38,12 @@ BASE_COLOR = (90, 90, 90)
 WIDTH = 100
 HEIGHT = 100
 PX_SIZE = 10
-WEBCAM_INDEX = 5
+WEBCAM_INDEX = 4
 WORKING_DRAWABLE = True
 
 # OSC section
 OSC_IP = "127.0.0.1"
 OSC_PORT = 9000  # VCV Rack default is often 9000 or 8000
 MAX_VOICES = 16  # Limit how many notes play per frame to prevent crashing VCV
-PITCH_MIN = -3.0 # -3 Octaves (C-3)
-PITCH_MAX = 7.0  # 10 Octaves (C0 to C10)
+PITCH_MIN = -2.0 # -3 Octaves (C-3)
+PITCH_MAX = 4.0  # 10 Octaves (C0 to C10)

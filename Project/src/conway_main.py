@@ -154,12 +154,20 @@ def main():
                 elif key_pressed[pygame.K_w]:
                     params.live_cells[(gx, gy)] = np.random.randint(len(params.ALIVE_COLOR))
 
+        # --- GAME LOGIC (Simulation) ---
         if not params.working:
+            # Single-step manual advance
             if key_pressed[pygame.K_n]:
-                update(params)
+                update_game_logic(params)
                 time.sleep(0.08)
         else:
-            update(params)
+            # Automatic advance
+            update_game_logic(params)
+            
+        # --- SOUND LOGIC (Always Run) ---
+        # This ensures we can hear static cells when paused,
+        # AND ensures sound stops (Gate 0) if we move the hand away.
+        update_sound_probe(params)
             
         render(params)
         draw_hud(params, clock.get_fps())
